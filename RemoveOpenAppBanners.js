@@ -1,72 +1,59 @@
 // ==UserScript==
-// @name         Block iOS "Open in App" Banners (Efficient)
+// @name         iOS Deep "Open in App" Nuker
 // @namespace    https://greasyfork.org/
-// @version      2.0
-// @description  Lightweight & fast: instantly hides mobile app banners and restores scrolling.
+// @version      3.0
+// @description  Traverses Shadow DOMs and iframes to remove stubborn "Open in App" banners.
 // @match        *://*/*
-// @run-at       document-start
+// @run-at       document-end
 // ==/UserScript==
 
 (function() {
     'use strict';
 
-    // 1. Inject instant CSS hiding rules (Zero CPU overhead)
-    const style = document.createElement('style');
-    style.innerHTML = `
-        /* Native Meta & Branch.io Banners */
-        meta[name="apple-itunes-app"],
-        meta[name="google-play-app"],
-        #branch-banner-iframe,
-        [id*="branch-banner"],
-        [class*="branch-banner"],
-        .branch-journeys-top,
-        
-        /* Reddit & Common App Overlays */
-        xpromo-app-selector,
-        xpromo-bottom-sheet,
-        .XPromoPopup,
-        shreddit-async-loader[async-request*="xpromo"],
-        .mweb-content-gate-container,
-        [class*="AppPrompt"],
-        .open-in-app-btn,
-        [class*="OpenInApp"],
-        [class*="smartbanner"],
-        #smartbanner,
-        
-        /* Common Floating "Open in App" Bars */
-        [class*="app-banner"],
-        [class*="open-app"],
-        [id*="app-banner"] {
-            display: none !important;
-            visibility: hidden !important;
-            height: 0 !important;
-            pointer-events: none !important;
-        }
+    function purgeBanners(root = document) {
+        // 1. Remove standard DOM elements
+        const selectors = [
+            '#branch-banner-iframe',
+            '[id*="branch-banner"]',
+            '[class*="branch-banner"]',
+            'xpromo-app-selector',
+            'xpromo-bottom-sheet',
+            '.XPromoPopup',
+            'shreddit-async-loader[async-request*="xpromo"]',
+            'smartbanner-wrapper',
+            '.smartbanner',
+            '#smartbanner'
+        ];
 
-        /* Force scrollability if overlays locked it */
-        html, body {
-            overflow: auto !important;
-        }
-    `;
-    (document.head || document.documentElement).appendChild(style);
+        selectors.forEach(s => {
+            root.querySelectorAll(s).forEach(el => el.remove());
+        });
 
-    // 2. Fast removal of native meta tags from DOM
-    const removeMeta = () => {
-        document.querySelectorAll('meta[name="apple-itunes-app"], meta[name="google-play-app"]').forEach(el => el.remove());
-    };
-    removeMeta();
+        // 2. Scan all floating elements for "Open" buttons
+        const floaters = root.querySelectorAll('div, section, header, aside, button, a');
+        floaters.forEach(el => {
+            const text = (el.textContent || '').trim().toLowerCase();
+            if (
+                (text.includes('open in') || text.includes('use app') || text === 'open') &&
+                (text.includes('app') || text.includes('open'))
+            ) {
+                const style = window.getComputedStyle(el);
+                if (style.position === 'fixed' || style.position === 'sticky' || style.position === 'absolute') {
+                    // Make sure we're deleting the wrapper banner, not just the text node
+                    const container = el.closest('div, section, header, aside') || el;
+                    container.remove();
+                }
+            }
+        });
 
-    // 3. Debounced observer to delete hidden nodes completely without lagging the browser
-    let timeout = null;
-    const observer = new MutationObserver(() => {
-        if (timeout) return;
-        timeout = setTimeout(() => {
-            removeMeta();
-            timeout = null;
-        }, 300);
-    });
+        // 3. Deep-scan Shadow DOMs (e.g. Reddit Shreddit components)
+        root.querySelectorAll('*').forEach(el => {
+            if (el.shadowRoot) {
+                purgeBanners(el.shadowRoot);
+            }
+        });
+    }
 
-    document.addEventListener('DOMContentLoaded', () => {
-        observer.observe(document.body, { childList: true, subtree: true });
-    });
+    // Run periodically to catch dynamic overlays
+    setInterval(purgeBanners, 750);
 })();
