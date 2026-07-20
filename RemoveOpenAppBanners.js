@@ -1,5 +1,8 @@
 // ==UserScript==
-// @name         Dismiss Open In App Banners (Improved)
+// @name         Block iOS "Open in App" Banners (Efficient)
+// @namespace    https://greasyfork.org/
+// @version      2.0
+// @description  Lightweight & fast: instantly hides mobile app banners and restores scrolling.
 // @match        *://*/*
 // @run-at       document-start
 // ==/UserScript==
@@ -7,63 +10,63 @@
 (function() {
     'use strict';
 
-    // 1. Instantly nuke native iOS Smart App Banners before they render
-    const removeMetaBanners = () => {
-        const metaBanners = document.querySelectorAll('meta[name="apple-itunes-app"], meta[name="google-play-app"]');
-        metaBanners.forEach(meta => meta.remove());
-    };
-
-    // Run as early as possible
-    removeMetaBanners();
-
-    // 2. Main cleanup function for DOM banners and popups
-    const dismiss = () => {
-        removeMetaBanners();
-
-        // Common button/container selectors for web app prompts
-        const selectors = [
-            // Reddit
-            'xpromo-app-selector',
-            'xpromo-bottom-sheet',
-            '.XPromoPopup',
-            'shreddit-async-loader[async-request*="xpromo"]',
-            // Quora, Medium, LinkedIn, Generic
-            '.mweb-content-gate-container',
-            'div[class*="AppPrompt"]',
-            '.open-in-app-btn',
-            'div[class*="OpenInApp"]',
-            'div[class*="smartbanner"]',
-            '.smartbanner',
-            '#smartbanner',
-            'button[aria-label*="Open in app"i]',
-            'button[aria-label*="Use app"i]'
-        ];
-
-        selectors.forEach(selector => {
-            document.querySelectorAll(selector).forEach(el => {
-                el.remove(); // Completely delete from DOM instead of just hiding
-            });
-        });
-
-        // Restore page scrolling if an overlay locked it
-        if (document.body) {
-            const bodyStyle = window.getComputedStyle(document.body);
-            if (bodyStyle.overflow === 'hidden') {
-                document.body.style.setProperty('overflow', 'auto', 'important');
-            }
+    // 1. Inject instant CSS hiding rules (Zero CPU overhead)
+    const style = document.createElement('style');
+    style.innerHTML = `
+        /* Native Meta & Branch.io Banners */
+        meta[name="apple-itunes-app"],
+        meta[name="google-play-app"],
+        #branch-banner-iframe,
+        [id*="branch-banner"],
+        [class*="branch-banner"],
+        .branch-journeys-top,
+        
+        /* Reddit & Common App Overlays */
+        xpromo-app-selector,
+        xpromo-bottom-sheet,
+        .XPromoPopup,
+        shreddit-async-loader[async-request*="xpromo"],
+        .mweb-content-gate-container,
+        [class*="AppPrompt"],
+        .open-in-app-btn,
+        [class*="OpenInApp"],
+        [class*="smartbanner"],
+        #smartbanner,
+        
+        /* Common Floating "Open in App" Bars */
+        [class*="app-banner"],
+        [class*="open-app"],
+        [id*="app-banner"] {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            pointer-events: none !important;
         }
-        if (document.documentElement) {
-            const htmlStyle = window.getComputedStyle(document.documentElement);
-            if (htmlStyle.overflow === 'hidden') {
-                document.documentElement.style.setProperty('overflow', 'auto', 'important');
-            }
-        }
-    };
 
-    // Run when DOM is ready and observe for dynamic popups
+        /* Force scrollability if overlays locked it */
+        html, body {
+            overflow: auto !important;
+        }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+
+    // 2. Fast removal of native meta tags from DOM
+    const removeMeta = () => {
+        document.querySelectorAll('meta[name="apple-itunes-app"], meta[name="google-play-app"]').forEach(el => el.remove());
+    };
+    removeMeta();
+
+    // 3. Debounced observer to delete hidden nodes completely without lagging the browser
+    let timeout = null;
+    const observer = new MutationObserver(() => {
+        if (timeout) return;
+        timeout = setTimeout(() => {
+            removeMeta();
+            timeout = null;
+        }, 300);
+    });
+
     document.addEventListener('DOMContentLoaded', () => {
-        dismiss();
-        const observer = new MutationObserver(dismiss);
         observer.observe(document.body, { childList: true, subtree: true });
     });
 })();
